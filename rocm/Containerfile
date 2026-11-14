@@ -3,7 +3,8 @@
 FROM docker.io/rocm/jax:rocm10.1.0_ubuntu24.04_py3.12_jax_release_0.11.1
 RUN python3 -m pip install --no-cache-dir \
       matplotlib==3.11.2 optax==0.2.5 pytest==9.1.1 requests==2.34.2 tokenizers==0.23.3
-# RX 7600 / 7600 XT is gfx1102, which the JAX ROCm wheels don't target; present it as gfx1100.
+# RX 7600 / 7600 XT is gfx1102. ROCm 10.1 supports it, but the JAX ROCm plugin rejects it
+# ("no supported devices found for platform ROCM"), so present it as gfx1100.
 RUN ln -sf "$(command -v python3)" /usr/local/bin/python
 ENV HSA_OVERRIDE_GFX_VERSION=11.0.0
 WORKDIR /work

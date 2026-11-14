@@ -46,9 +46,10 @@ container so the device nodes and bind mount work on Fedora.
 
 All three are set in `rocm/Containerfile`:
 
-1. **`HSA_OVERRIDE_GFX_VERSION=11.0.0`**. JAX's ROCm wheels are built for gfx1030/1100/1101/1200/1201
-   and the Instinct parts, but not gfx1102 (RX 7600 / 7600 XT). This setting makes the runtime treat the
-   card as gfx1100. `11.0.1` also works. Remove it on a card that is already a build target.
+1. **`HSA_OVERRIDE_GFX_VERSION=11.0.0`**. ROCm 10.1 itself supports gfx1102 (RX 7600 / 7600 XT): it ships
+   gfx1102 device libraries and `rocminfo` reports the card correctly. JAX's ROCm plugin, however, refuses
+   the card with `no supported devices found for platform ROCM`. This setting makes the runtime report the
+   card as gfx1100, which the plugin accepts. `11.0.1` also works. Try without it first on other cards.
 2. **`XLA_FLAGS=--xla_gpu_enable_triton_gemm=false`**. With XLA's Triton GEMM fusions enabled, the
    default config fails on Navi 33 with `HSA_STATUS_ERROR_INVALID_DISPATCH_PARAMETERS` /
    `ROCM_ERROR_LAUNCH_OUT_OF_RESOURCES` and the GPU hangs. The tests (tiny config) don't trigger it.
