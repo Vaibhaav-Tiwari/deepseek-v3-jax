@@ -1,0 +1,15 @@
+# JAX on ROCm for deepseek-v3-jax. The upstream requirements pin jax 0.4.34 + jax-metal (Apple only);
+# here JAX comes from AMD's image and only the non-JAX deps are installed.
+FROM docker.io/rocm/jax:rocm10.1.0_ubuntu24.04_py3.12_jax_release_0.11.1
+RUN python3 -m pip install --no-cache-dir \
+      matplotlib==3.11.2 optax==0.2.5 pytest==9.1.1 requests==2.34.2 tokenizers==0.23.3
+# RX 7600 / 7600 XT is gfx1102, which the JAX ROCm wheels don't target; present it as gfx1100.
+RUN ln -sf "$(command -v python3)" /usr/local/bin/python
+ENV HSA_OVERRIDE_GFX_VERSION=11.0.0
+WORKDIR /work
+# XLA's Triton GEMM fusions produce kernels that exceed Navi 33's dispatch limits at the default
+# config (HSA_STATUS_ERROR_INVALID_DISPATCH_PARAMETERS / LAUNCH_OUT_OF_RESOURCES). Use rocBLAS/hipBLASLt instead.
+ENV XLA_FLAGS=--xla_gpu_enable_triton_gemm=false
+# The published run used jax 0.4.34, before jax 0.5 flipped jax_threefry_partitionable to True.
+# Keep the old PRNG so `jax.random.key(seed)` gives the same initial weights as the M5 run.
+ENV JAX_THREEFRY_PARTITIONABLE=false
