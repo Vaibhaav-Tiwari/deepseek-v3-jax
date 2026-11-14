@@ -1,56 +1,166 @@
 # DeepSeek V3 in pure JAX
 
-DeepSeek V3's architecture (Multi-head Latent Attention, DeepSeekMoE with shared and
-routed experts, auxiliary-loss-free load balancing and multi-token prediction) in
-**190 lines of pure JAX**, pretrained from scratch on a MacBook Air on public-domain
-detective fiction.
+The architecture from the [DeepSeek-V3 technical report](https://arxiv.org/abs/2412.19437) in **190 lines of pure JAX**, pretrained from scratch on a MacBook Air on public-domain detective fiction.
 
-No Flax, no Equinox: params are plain dicts of arrays, everything is a function.
+No Flax, no Equinox, no PyTorch. Params are plain dicts of arrays and every part of the model is a function you can read top to bottom in [`deepseek_v3.py`](deepseek_v3.py).
 
-**Write-up** with diagrams, code walkthrough and results: [DeepSeek V3 in 190 lines of pure JAX](https://vaibhaav.in/writing/deepseek-v3-jax/)
+**Read the write-up:** [DeepSeek V3 in 190 lines of pure JAX](https://vaibhaav.in/writing/deepseek-v3-jax/), with diagrams, the code explained piece by piece, and the results.
 
-## Quickstart (Apple Silicon Mac)
+![The whole model: 36.2M parameters, 13.6M used per token](post/diagrams/01-whole-model-clean.png)
+
+## What's in the 190 lines
+
+| Idea from the paper | What it does | Where |
+|---|---|---|
+| Multi-head Latent Attention (MLA) | Caches one small latent per token instead of full keys and values: **480 → 144** numbers per token per layer here | `mla`, `init_cache` |
+| Decoupled RoPE | One rotary key shared by all heads, kept outside the compressed latent | `rope`, `apply_rope`, `mla` |
+| DeepSeekMoE | 1 shared expert that always runs + 16 routed experts, top-4 per token | `route`, `moe` |
+| Auxiliary-loss-free balancing | A per-expert bias nudges routing toward idle experts; it changes *which* experts are picked, not their weights | `update_bias`, `route` |
+| Sequence-wise balance loss | The small complementary loss from the paper (α = 1e-4) | `seq_balance_loss` |
+| Multi-token prediction (MTP) | An extra module also predicts the token after next, weighted λ = 0.3 in the loss | `forward`, `loss_fn` |
+| Training and generation | bf16 compute on f32 master weights; prefill + decode with the MLA cache | `make_train_step`, `generate` |
+
+## Results
+
+One run of the default config on a MacBook Air M5 (24 GB):
+
+| | |
+|---|---|
+| Model | 36.2M parameters, 13.6M active per token |
+| Data | 207 books, 21.7M training tokens (Hammett repeated 3×); validation is held-out crime fiction |
+| Training | 12,000 steps, ~98M tokens (~4.5 epochs), ~2.6 h |
+| Speed | ~10.7k tokens/s (median) |
+| Validation loss | 5.02 (step 250) → **3.51** |
+| Expert load, with bias | 5.7–6.9% per expert (even is 6.25%), at step 2000 |
+| Expert load, without bias | 0.09–18.6% per expert, at step 2000 |
+
+With balancing on and off, validation loss at step 2000 was the same (3.921 vs 3.923). The bias evens out the experts without costing anything, which is the paper's claim.
+
+![Expert load with and without the balancing bias](post/figures/expert_load_final.png)
+
+Its own words, from the prompt "The fog came in off the":
+
+> The fog came in off the bay, and the great trees were spreading and the stars were shining.
+
+This is an architecture demo, not a strong language model. See the write-up for what worked, what didn't, and what's missing.
+
+## Reproduce it
+
+You need an Apple Silicon Mac, Python 3.12 and [uv](https://docs.astral.sh/uv/). The published run used 24 GB of memory. No Mac? See [Running on CPU](#running-on-cpu).
+
+**1. Install**
 
 ```bash
-uv venv -p 3.12 .venv && uv pip install --python .venv/bin/python -r requirements.txt
-.venv/bin/python smoke_metal.py          # optional: check what jax-metal supports on your Mac
-.venv/bin/python prepare_data.py         # download + clean ~84 MB of PD crime fiction, train BPE
-.venv/bin/python train.py                # ~2.5 h on an M5 Air (12k steps, bf16 compute)
-.venv/bin/python sample.py --prompt "The fog came in off the bay" --num 3
-.venv/bin/python plots.py                # figures into post/figures/
+git clone https://github.com/Vaibhaav-Tiwari/deepseek-v3-jax.git && cd deepseek-v3-jax
+uv venv -p 3.12 .venv
+uv pip install --python .venv/bin/python -r requirements.txt
 ```
 
-- `--config small` is a lighter preset for 8–16 GB Macs (fewer layers/experts, shorter
-  context). It should work, but it's untested.
-- No working jax-metal? Everything also runs on CPU: `JAX_PLATFORMS=cpu .venv/bin/python train.py --config small`
-  (checked by hand for 2 steps; the automated test covers the `tiny` config).
-- Tests: `JAX_PLATFORMS=cpu .venv/bin/pytest tests.py -v`.
+Every version in `requirements.txt` is pinned. `jax-metal 0.1.1` only works with `jax==0.4.34`, so don't upgrade JAX.
 
-`jax-metal` 0.1.1 needs exactly `jax==0.4.34`; `requirements.txt` pins it.
+**2. Check your setup**
+
+```bash
+JAX_PLATFORMS=cpu .venv/bin/pytest tests.py -q    # 39 passed
+.venv/bin/python smoke_metal.py                   # optional: what jax-metal supports on your Mac
+```
+
+In `smoke_metal.py`, "grad through 2-axis contraction" fails on jax-metal 0.1.1. That's expected, and the model is written to avoid it.
+
+**3. Build the dataset**
+
+```bash
+.venv/bin/python prepare_data.py
+```
+
+This downloads the 207 books in [`sources.txt`](sources.txt) (~120 MB, about 7 minutes), cleans them, trains an 8,192-token BPE tokenizer and writes `data/train.bin`, `data/val.bin` and `data/tokenizer.json`. It should print:
+
+```
+train: 211 docs, 83.4M chars, 21.69M tokens
+val: 4 docs, 1.1M chars, 0.30M tokens
+```
+
+The published run's data had these hashes:
+
+```bash
+shasum -a 256 data/train.bin data/val.bin data/tokenizer.json
+```
+
+```
+d37aca97e707bb81b6e4d266cc1adfd1f3e3556457c6eb724e495118a734e0bb  data/train.bin
+b7ac285b115e6793b5d36aa5b4bc6e81a5fccfc7af0908a306d3828ebca9c31c  data/val.bin
+c5a142b4006a967c880dda44ad792719d53c16d947da3b6c2332d6132d9967cc  data/tokenizer.json
+```
+
+You will most likely get different hashes. The Hammett books are pinned to exact Standard Ebooks commits and come out identical, but Project Gutenberg files can't be pinned, and Gutenberg has since re-issued 28 of the 203 books with small edits (mostly accents stripped, like "José" → "Jose"). The token counts come out the same, so training should behave the same.
+
+**4. Train**
+
+```bash
+.venv/bin/python train.py                                         # the main run: 12k steps, ~2.6 h
+.venv/bin/python train.py --steps 2000 --out runs/bias_on         # balancing ablation, with the bias
+.venv/bin/python train.py --steps 2000 --out runs/bias_off --no-bias   # ...and without it
+```
+
+Each run writes `metrics.jsonl` (loss, validation loss, per-expert load, biases, tokens/s) and `ckpt.pkl` (saved at every evaluation) into its `--out` folder, which defaults to `runs/main`. Seeds are fixed, but GPU math on Metal isn't bit-for-bit deterministic, so expect your numbers to land close to the ones above rather than match them exactly.
+
+**5. Generate**
+
+```bash
+.venv/bin/python sample.py --prompt "The fog came in off the" --num 3
+```
+
+Defaults: temperature 0.8, top-k 50, 300 new tokens per sample (`--temp`, `--top-k`, `--n`).
+
+**6. Make the figures**
+
+```bash
+.venv/bin/python plots.py                    # needs runs/main, runs/bias_on, runs/bias_off
+JAX_PLATFORMS=cpu .venv/bin/python charts.py # the rest of the write-up's charts
+```
+
+Both write into `post/figures/`.
+
+### Running on CPU
+
+Everything runs without jax-metal. It's much slower, so use the smaller config:
+
+```bash
+JAX_PLATFORMS=cpu .venv/bin/python train.py --config small
+```
+
+`--config small` (4 layers, 8 experts, top-2, 128-token context) is meant for 8–16 GB Macs too. It has only been checked for a couple of steps, not trained to the end.
 
 ## Files
 
-| file | what it is | counted in "190 lines"? |
-|---|---|---|
-| `deepseek_v3.py` | config, MLA, MoE, balancing, MTP, loss, train step, cached sampling | **yes** |
-| `train.py` | CLI training loop, logging, checkpoints | no |
-| `prepare_data.py`, `sources.txt` | corpus download/cleaning, tokenizer | no |
-| `sample.py`, `plots.py` | generation CLI, figures | no |
-| `tests.py` | 39 correctness checks | no |
-| `smoke_metal.py` | which JAX ops work on Apple's GPU | no |
+| File | What it is |
+|---|---|
+| [`deepseek_v3.py`](deepseek_v3.py) | **The model**: config, MLA, MoE, balancing, MTP, loss, train step, cached generation. The 190 lines. |
+| [`train.py`](train.py) | Training loop: AdamW with warmup and cosine decay, evaluation, checkpoints, logging |
+| [`prepare_data.py`](prepare_data.py), [`sources.txt`](sources.txt) | Download, clean and tokenize the corpus |
+| [`sample.py`](sample.py) | Text generation from a checkpoint |
+| [`tests.py`](tests.py) | 39 tests: causal masking, cache vs full forward, routing, balancing, MTP targets, NaN handling, bf16 master weights, and more |
+| [`smoke_metal.py`](smoke_metal.py) | Which JAX operations work on Apple's GPU |
+| [`plots.py`](plots.py), [`charts.py`](charts.py) | The figures, all drawn from the logs, checkpoint and corpus |
+| [`post/`](post) | Diagrams, figures and screenshots from the write-up |
 
-Line count = non-blank, non-comment lines: `grep -cvE '^\s*(#|$)' deepseek_v3.py`.
+"190 lines" counts the non-blank, non-comment lines of `deepseek_v3.py` after its docstring:
+
+```bash
+tail -n +5 deepseek_v3.py | grep -cvE '^\s*(#|$)'    # 190
+```
+
+## What's simplified
+
+- **Dense MoE compute.** Every expert runs on every token and the unpicked ones are zeroed. The routing math is exact, but there's no sparse dispatch or expert parallelism.
+- **No weight absorption in MLA.** The latent is decompressed explicitly, which is easier to read and slower at inference.
+- **Not included:** FP8 training, DualPipe, node-limited routing, YaRN context extension, and any post-training.
+- **Scale.** 36.2M parameters vs 671B, 6 layers vs 61, a 256-token context vs 128K.
 
 ## Data and licensing
 
-All training text is **public domain in the United States**: Dashiell Hammett's *Red
-Harvest*, *The Dain Curse*, *The Maltese Falcon* and Continental Op stories (Standard
-Ebooks CC0 editions), plus ~200 detective and crime novels from Project Gutenberg.
-Every source is pinned in `sources.txt`. Public-domain status outside the US may differ.
+All training text is public domain in the United States: Dashiell Hammett's *Red Harvest*, *The Dain Curse*, *The Maltese Falcon* and Continental Op stories (CC0 editions from [Standard Ebooks](https://standardebooks.org)), plus about 200 detective and crime novels from [Project Gutenberg](https://www.gutenberg.org). Every source is listed in [`sources.txt`](sources.txt). Public-domain status outside the US may differ.
 
-## What's simplified (see the post for details)
+## Reference
 
-- MoE runs every expert on every token and zeroes the unpicked ones (exact routing math,
-  dense compute). No sparse dispatch, no expert parallelism.
-- No FP8, DualPipe, node-limited routing, YaRN, or post-training.
-- MLA decompresses the latent explicitly instead of using the weight-absorption trick.
+DeepSeek-AI, [DeepSeek-V3 Technical Report](https://arxiv.org/abs/2412.19437), 2024.

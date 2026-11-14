@@ -1,6 +1,6 @@
 """Train DeepSeek V3 on the prepared corpus.
 
-Run:  .venv/bin/python train.py                     # default config, ~2.5 h on an M5 Air
+Run:  .venv/bin/python train.py                     # default config, ~2.6 h on an M5 Air
       .venv/bin/python train.py --config small      # for 8-16 GB Macs (untested)
       .venv/bin/python train.py --no-bias --steps 2000 --out runs/bias_off   # balancing ablation
 """

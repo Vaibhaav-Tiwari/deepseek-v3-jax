@@ -1,9 +1,9 @@
 # kind<TAB>url<TAB>title<TAB>license_note
-# Hardboiled core: Dashiell Hammett via Standard Ebooks (CC0 edition of US public-domain text).
-standardebooks	https://codeload.github.com/standardebooks/dashiell-hammett_red-harvest/tar.gz/HEAD	Hammett — Red Harvest (1929)	US public domain; SE edition CC0
-standardebooks	https://codeload.github.com/standardebooks/dashiell-hammett_the-dain-curse/tar.gz/HEAD	Hammett — The Dain Curse (1929)	US public domain; SE edition CC0
-standardebooks	https://codeload.github.com/standardebooks/dashiell-hammett_the-maltese-falcon/tar.gz/HEAD	Hammett — The Maltese Falcon (1930)	US public domain; SE edition CC0
-standardebooks	https://codeload.github.com/standardebooks/dashiell-hammett_continental-op-stories/tar.gz/HEAD	Hammett — Continental Op Stories	US public domain; SE edition CC0
+# Hardboiled core: Dashiell Hammett via Standard Ebooks (CC0 edition of US public-domain text), pinned to the commits used for the published run.
+standardebooks	https://codeload.github.com/standardebooks/dashiell-hammett_red-harvest/tar.gz/49eaa501d92df037623fdc9093aec73b24ff7e88	Hammett — Red Harvest (1929)	US public domain; SE edition CC0
+standardebooks	https://codeload.github.com/standardebooks/dashiell-hammett_the-dain-curse/tar.gz/9827f290784fe0ba5956dd14643768c64d5f86f5	Hammett — The Dain Curse (1929)	US public domain; SE edition CC0
+standardebooks	https://codeload.github.com/standardebooks/dashiell-hammett_the-maltese-falcon/tar.gz/a5d7bfc77f7089b7c163bd5e5f4a1c402121478b	Hammett — The Maltese Falcon (1930)	US public domain; SE edition CC0
+standardebooks	https://codeload.github.com/standardebooks/dashiell-hammett_continental-op-stories/tar.gz/356eea815ed67a986ca93fa4daa2192d384afa8c	Hammett — Continental Op Stories	US public domain; SE edition CC0
 # Classic detective & crime fiction, 1880s-1930s, Project Gutenberg (US public domain).
 gutenberg	https://www.gutenberg.org/cache/epub/108/pg108.txt	Doyle — The Return of Sherlock Holmes	US public domain (Project Gutenberg)
 gutenberg	https://www.gutenberg.org/cache/epub/204/pg204.txt	Chesterton — The innocence of Father Brown	US public domain (Project Gutenberg)

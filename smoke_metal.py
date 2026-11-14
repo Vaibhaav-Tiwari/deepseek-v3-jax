@@ -1,7 +1,7 @@
 """Does JAX on Apple's Metal backend support everything DeepSeek V3 needs?
 
 Run:  .venv/bin/python smoke_metal.py
-Each check prints PASS/FAIL; results go into docs/metal-notes.md.
+Each check prints PASS or FAIL with the error, so you can see what your Mac's jax-metal supports.
 """
 import time, traceback
 import numpy as np
