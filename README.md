@@ -44,6 +44,19 @@ Its own words, from the prompt "The fog came in off the":
 
 This is an architecture demo, not a strong language model. See the write-up for what worked, what didn't, and what's missing.
 
+## Try the trained model
+
+The [v1.0 release](https://github.com/Vaibhaav-Tiwari/deepseek-v3-jax/releases/tag/v1.0) has the exact checkpoint and data from the published run. After [installing](#reproduce-it) (step 1):
+
+```bash
+mkdir -p data runs/main
+curl -L -o runs/main/ckpt.pkl      https://github.com/Vaibhaav-Tiwari/deepseek-v3-jax/releases/download/v1.0/ckpt.pkl          # 138 MB
+curl -L -o data/tokenizer.json     https://github.com/Vaibhaav-Tiwari/deepseek-v3-jax/releases/download/v1.0/tokenizer.json
+.venv/bin/python sample.py --prompt "The fog came in off the" --num 3
+```
+
+The checkpoint is a Python pickle, which can run code when loaded. Only load checkpoints from sources you trust.
+
 ## Reproduce it
 
 You need an Apple Silicon Mac, Python 3.12 and [uv](https://docs.astral.sh/uv/). The published run used 24 GB of memory. No Mac? See [Running on CPU](#running-on-cpu).
@@ -94,6 +107,14 @@ c5a142b4006a967c880dda44ad792719d53c16d947da3b6c2332d6132d9967cc  data/tokenizer
 
 You will most likely get different hashes. The Hammett books are pinned to exact Standard Ebooks commits and come out identical, but Project Gutenberg files can't be pinned, and Gutenberg has since re-issued 28 of the 203 books with small edits (mostly accents stripped, like "José" → "Jose"). The token counts come out the same, so training should behave the same.
 
+**To train on the exact same bytes**, skip `prepare_data.py` and download the published data instead:
+
+```bash
+mkdir -p data
+for f in train.bin val.bin tokenizer.json; do curl -L -o data/$f https://github.com/Vaibhaav-Tiwari/deepseek-v3-jax/releases/download/v1.0/$f; done
+shasum -a 256 data/*.bin data/tokenizer.json    # should match the hashes above
+```
+
 **4. Train**
 
 ```bash
@@ -120,6 +141,8 @@ JAX_PLATFORMS=cpu .venv/bin/python charts.py # the rest of the write-up's charts
 ```
 
 Both write into `post/figures/`.
+
+To redraw the figures without training, download the logs from the release: `metrics-main.jsonl`, `metrics-bias_on.jsonl` and `metrics-bias_off.jsonl` go into `runs/main/`, `runs/bias_on/` and `runs/bias_off/` as `metrics.jsonl`. `charts.py` also needs the checkpoint and the data.
 
 ### Running on CPU
 
@@ -164,3 +187,7 @@ All training text is public domain in the United States: Dashiell Hammett's *Red
 ## Reference
 
 DeepSeek-AI, [DeepSeek-V3 Technical Report](https://arxiv.org/abs/2412.19437), 2024.
+
+## License
+
+Code: [MIT](LICENSE). The training text is public domain in the US (see above).
