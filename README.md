@@ -7,6 +7,8 @@ detective fiction.
 
 No Flax, no Equinox: params are plain dicts of arrays, everything is a function.
 
+**Write-up** with diagrams, code walkthrough and results: [DeepSeek V3 in 190 lines of pure JAX](https://vaibhaav.in/writing/deepseek-v3-jax/)
+
 ## Quickstart (Apple Silicon Mac)
 
 ```bash
